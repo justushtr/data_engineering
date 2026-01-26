@@ -1,0 +1,252 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-pipeline-
+spec:
+  entrypoint: pipeline
+  serviceAccountName: argo-workflow
+
+  # workflow level parameters
+  
+  arguments:
+    parameters:
+      - name: experiment-name-mlflow
+        value: "argo-wf-pipeline"
+      - name: bucket-name
+        value: "input-data"
+      - name: filename
+        value: "student_performance_data.csv"
+      - name: output-path
+        value: "data/processed/"
+      - name: test-size
+        value: "0.2"
+      - name: random-state
+        value: "42"
+      - name: max-relative-error
+        value: "4.0"
+      - name: p95-relative-error
+        value: "0.3"
+      - name: mae-drift-factor
+        value: "1.2"
+      - name: max-mean-residual
+        value: "5.0"
+
+  templates:
+
+  # pipeline definition
+
+  - name: pipeline
+    steps:
+      - - name: eda
+          template: run-script
+          arguments:
+            parameters:
+              - name: script
+                value: exploratory_data_analysis.py
+              - name: cli-args
+                value: >-
+                  --experiment-name-mlflow {{workflow.parameters.experiment-name-mlflow}}
+                  --bucket-name {{workflow.parameters.bucket-name}}
+                  --filename {{workflow.parameters.filename}}
+
+      - - name: preprocess
+          template: preprocess-step
+          arguments:
+            parameters:
+              - name: script
+                value: preprocessing.py
+              - name: cli-args
+                value: >-
+                  --experiment-name-mlflow {{workflow.parameters.experiment-name-mlflow}}
+                  --bucket-name {{workflow.parameters.bucket-name}}
+                  --filename {{workflow.parameters.filename}}
+                  --output-path {{workflow.parameters.output-path}}
+                  --test-size {{workflow.parameters.test-size}}
+                  --random-state {{workflow.parameters.random-state}}
+
+      - - name: train
+          template: train-step
+          arguments:
+            parameters:
+              - name: script
+                value: train.py
+              - name: cli-args
+                value: >-
+                  --experiment-name-mlflow {{workflow.parameters.experiment-name-mlflow}}
+                  --preprocessing-run-id {{steps.preprocess.outputs.parameters.preprocessing-run-id}}
+
+      - - name: evaluate
+          template: run-script
+          arguments:
+            parameters:
+              - name: script
+                value: evaluation.py
+              - name: cli-args
+                value: >-
+                  --experiment-name-mlflow {{workflow.parameters.experiment-name-mlflow}}
+                  --training-run-id {{steps.train.outputs.parameters.training-run-id}}
+                  --preprocessing-run-id {{steps.preprocess.outputs.parameters.preprocessing-run-id}}
+                  --max-relative-error {{workflow.parameters.max-relative-error}}
+                  --p95-relative-error {{workflow.parameters.p95-relative-error}}
+                  --mae-drift-factor {{workflow.parameters.mae-drift-factor}}
+                  --max-mean-residual {{workflow.parameters.max-mean-residual}}
+
+  # Run script as the base
+
+  - name: run-script
+    inputs:
+      parameters:
+        - name: script
+        - name: cli-args
+    container:
+      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      command: ["bash", "-c"]
+      args:
+        - >
+          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-user
+
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-password
+
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-user
+
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-password
+
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio.data-storage.svc.cluster.local:9000"
+
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow.mlops.svc.cluster.local:5000"
+
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+
+        - name: POSTGRES_HOST
+          value: "postgres-postgresql.data-storage.svc.cluster.local"
+
+        - name: POSTGRES_PORT
+          value: "5432"
+
+        - name: POSTGRES_DB
+          value: "ds_db"
+
+  # preprocess step separated to write outputs
+
+  - name: preprocess-step
+    inputs:
+      parameters:
+        - name: script
+        - name: cli-args
+    container:
+      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      command: ["bash", "-c"]
+      args:
+        - >
+          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-password
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-password
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio.data-storage.svc.cluster.local:9000"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow.mlops.svc.cluster.local:5000"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        - name: POSTGRES_HOST
+          value: "postgres-postgresql.data-storage.svc.cluster.local"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "ds_db"
+    outputs:
+      parameters:
+        - name: preprocessing-run-id
+          valueFrom:
+            path: /tmp/preprocessing_run_id.txt
+
+  # train step separated to write outputs
+
+  - name: train-step
+    inputs:
+      parameters:
+        - name: script
+        - name: cli-args
+    container:
+      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      command: ["bash", "-c"]
+      args:
+        - >
+          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-user
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio
+              key: root-password
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-admin
+              key: postgres-password
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio.data-storage.svc.cluster.local:9000"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://mlflow.mlops.svc.cluster.local:5000"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        - name: POSTGRES_HOST
+          value: "postgres-postgresql.data-storage.svc.cluster.local"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "ds_db"
+    outputs:
+      parameters:
+        - name: training-run-id
+          valueFrom:
+            path: /tmp/train_run_id.txt

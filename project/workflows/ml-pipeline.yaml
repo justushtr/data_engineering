@@ -1,0 +1,91 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: ml-pipeline-template
+  namespace: argo-workflows
+spec:
+  entrypoint: ml-pipeline
+  serviceAccountName: argo
+  templates:
+
+    # ----------------------------
+    # DAG ENTRYPOINT
+    # ----------------------------
+    - name: ml-pipeline
+      dag:
+        tasks:
+          - name: eda
+            template: python-task
+            arguments:
+              parameters:
+                - name: script
+                  value: /app/eda.py
+
+          - name: preprocessing
+            template: python-task
+            arguments:
+              parameters:
+                - name: script
+                  value: /app/preprocessing.py
+            dependencies: [eda]
+
+          - name: training
+            template: python-task
+            arguments:
+              parameters:
+                - name: script
+                  value: /app/train.py
+                - name: preprocessing_run_id
+                  value: "{{tasks.preprocessing.outputs.parameters.run_id}}"
+            dependencies: [preprocessing]
+
+          - name: evaluation
+            template: python-task
+            arguments:
+              parameters:
+                - name: script
+                  value: /app/evaluation.py
+                - name: training_run_id
+                  value: "{{tasks.training.outputs.parameters.run_id}}"
+            dependencies: [training]
+
+    # ----------------------------
+    # PYTHON TASK TEMPLATE
+    # ----------------------------
+    - name: python-task
+      inputs:
+        parameters:
+          - name: script
+          - name: preprocessing_run_id
+            default: ""
+          - name: training_run_id
+            default: ""
+      outputs:
+        parameters:
+          - name: run_id
+            valueFrom:
+              path: /tmp/run_id.txt
+      container:
+        image: ghcr.io/marius2311/python-for-ml:1.0
+        command: ["python"]
+        args:
+          - "{{inputs.parameters.script}}"
+          - "--preprocessing-run-id"
+          - "{{inputs.parameters.preprocessing_run_id}}"
+          - "--training-run-id"
+          - "{{inputs.parameters.training_run_id}}"
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "http://mlflow.mlops.svc.cluster.local:5000"
+          - name: MLFLOW_S3_ENDPOINT_URL
+            value: "http://minio.data-storage.svc.cluster.local:9000"
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: mlflow-minio-creds
+                key: accesskey
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: mlflow-minio-creds
+                key: secretkey
