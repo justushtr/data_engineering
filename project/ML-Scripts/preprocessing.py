@@ -74,7 +74,7 @@ def main():
         for col in columns_to_str:
             df[col] = df[col].astype(str)
 
-        df["quantity"] = df["quantitiy"].astype(int)
+        df["quantity"] = df["quantiy"].astype(int)
 
         df["order_date"] = pd.to_datetime(
             df["order_year"].astype(str) + '-' +
@@ -84,7 +84,7 @@ def main():
 
         df["order_weekday_index"] = df["order_date"].dt.weekday
         df["order_weekday"] = df["order_date"].dt.day_name()
-        df["order_week_of_year"] = df["order_date"].dt.isocalender().week
+        df["order_week_of_year"] = df["order_date"].dt.isocalendar().week
         df["order_is_weekend"] = df["order_weekday_index"] >= 5
 
         df["ship_date"] = pd.to_datetime(
@@ -94,7 +94,7 @@ def main():
         )
 
         df["original_price_per_unit"] = df["sales"] / (df["quantity" * (1- df["discount"])])
-        df["markdown_amount"] = (df["original_price_per_unit"] * df["quantity"]) - df["sales"])
+        df["markdown_amount"] = (df["original_price_per_unit"] * df["quantity"]) - df["sales"]
 
         target_col = "profit"
 
@@ -107,7 +107,7 @@ def main():
 
         numeric_cols = [
             "sales",
-            "region",
+            "quantity",
             "original_price_per_unit",
             "markdown_amount"
         ]

@@ -8,14 +8,14 @@ from botocore.client import Config
 from io import BytesIO
 
 EXPECTED_COLUMNS = [
-    "gender",
-    "race/ethnicity",
-    "parental level of education",
-    "lunch",
-    "test preparation course",
-    "math score",
-    "reading score",
-    "writing score",
+    "profit",          
+    "sales",            
+    "quantity",         
+    "discount",        
+    "sub_category",  
+    "region",        
+    "segment",     
+    "order_month" 
 ]
 
 
@@ -44,7 +44,7 @@ def load_data_from_s3(bucket_name, file_name):
     bucket = s3.Bucket(bucket_name)
     
     obj = bucket.Object(file_name).get()
-    df = pd.read_csv(BytesIO(obj["Body"].read()))
+    df = pd.read_csv(BytesIO(obj["Body"].read()), index_col=0)
     
     return df
 
@@ -56,14 +56,14 @@ def main():
     mlflow.set_experiment(args.experiment_name_mlflow)
 
     EXPECTED_COLUMNS = [
-        "gender",
-        "race/ethnicity",
-        "parental level of education",
-        "lunch",
-        "test preparation course",
-        "math score",
-        "reading score",
-        "writing score",
+        "profit",          
+        "sales",            
+        "quantity",         
+        "discount",        
+        "sub_category",  
+        "region",        
+        "segment",     
+        "order_month" 
     ]
 
     with mlflow.start_run(run_name="eda") as eda_run:
@@ -87,11 +87,10 @@ def main():
         }
 
         categorical_cols = [
-            "gender",
-            "race/ethnicity",
-            "parental level of education",
-            "lunch",
-            "test preparation course",
+            "sub_category",
+            "region",
+            "segment",
+            "order_month"
         ]
 
         categorical_distributions = {
@@ -100,10 +99,11 @@ def main():
         }
 
         target_stats = {
-            "math_score_mean": float(df["math score"].mean()),
-            "math_score_std": float(df["math score"].std()),
-            "math_score_min": int(df["math score"].min()),
-            "math_score_max": int(df["math score"].max()),
+            "profit_mean": float(df["profit"].mean()),
+            "profit_std": float(df["profit"].std()),
+            "profit_min": float(df["profit"].min()),
+            "profit_max": float(df["profit"].max()),
+            "sales_sum": float(df["sales"].sum())
         }
 
         os.makedirs("eda", exist_ok=True)
@@ -121,8 +121,8 @@ def main():
 
         mlflow.log_metrics({
             "num_rows": len(df),
-            "math_score_mean": target_stats["math_score_mean"],
-            "math_score_std": target_stats["math_score_std"],
+            "profit_mean": target_stats["profit_mean"],
+            "sales_sum": target_stats["sales_sum"],
         })
 
 
