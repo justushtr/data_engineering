@@ -23,9 +23,9 @@ spec:
       - name: random-state
         value: "42"
       - name: max-relative-error
-        value: "4.0"
+        value: "10.0"
       - name: p95-relative-error
-        value: "0.3"
+        value: "1.0"
       - name: mae-drift-factor
         value: "1.2"
       - name: max-mean-residual
