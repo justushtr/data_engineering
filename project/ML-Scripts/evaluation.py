@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import mlflow
 from mlflow.tracking import MlflowClient
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, r2_score, median_absolute_error
 
 
 def parse_args():
@@ -14,8 +14,8 @@ def parse_args():
     parser.add_argument("--experiment-name-mlflow", required=True)
     parser.add_argument("--training-run-id", required=True)
     parser.add_argument("--preprocessing-run-id", required=True)
-    parser.add_argument("--max-relative-error", type=float, default=4)
-    parser.add_argument("--p95-relative-error", type=float, default=0.3)
+    parser.add_argument("--max-relative-error", type=float, default=10)
+    parser.add_argument("--p95-relative-error", type=float, default=1.0)
     parser.add_argument("--mae-drift-factor", type=float, default=1.2)
     parser.add_argument("--max-mean-residual", type=float, default=5.0)
     return parser.parse_args()
@@ -83,37 +83,35 @@ def main():
 
         y_pred = model.predict(X_val)
     
-        abs_errors = np.abs(y_pred - y_val)
-        relative_errors = abs_errors / np.maximum(y_val, 1.0)
-        residuals = y_pred - y_val
-    
-        # Gate 1: max relative error
-        gate_max_rel_error = relative_errors.max() <= args.max_relative_error
-    
-        # Gate 2: p95 relative error
-        gate_p95_rel_error = (
-            np.percentile(relative_errors, 95) <= args.p95_relative_error
-        )
-    
-        # Gate 3: MAE drift
+        ## Calculatios
         val_mae = mean_absolute_error(y_val, y_pred)
+        val_r2 = r2_score(y_val, y_pred)
+        val_medae = median_absolute_error(y_val, y_pred)
+
+        std_profit = np.std(y_val)
+
+        residuals = y_pred - y_val
+        abs_errors = np.abs(y_pred - y_val)
+        
+        relative_errors = abs_errors / np.maximum(np.abs(y_val), 1e-6)        
         train_mae = best_run.data.metrics.get("mae", val_mae)
-        gate_mae_drift = val_mae <= train_mae * args.mae_drift_factor
-    
-        # Gate 4: residual bias
+
+        ## Gates
+        # Business Gates
+        gate_r2_score = val_r2 > 0.60
+        gate_mae_vs_std = val_mae < (0.5 * std_profit)
+
+        # Technical Gates
+        gate_mae_drift = val_mae <= (train_mae * args.mae_drift_factor)
         gate_residual_bias = abs(residuals.mean()) <= args.max_mean_residual
-    
-        # Gate 5: score range sanity
-        gate_score_range = (
-            (y_pred >= 0).all() and (y_pred <= 100).all()
-        )
+        gate_p95_rel_error = np.percentile(relative_errors, 95) <= args.p95_relative_error
     
         promote = all([
-            gate_max_rel_error,
-            gate_p95_rel_error,
+            gate_r2_score,
+            gate_mae_vs_std,
             gate_mae_drift,
             gate_residual_bias,
-            gate_score_range,
+            gate_p95_rel_error,
         ])
     
         # ---- Decision artifact
@@ -122,31 +120,34 @@ def main():
             "best_model_name": best_run.info.run_name,
             "metrics": {
                 "val_mae": float(val_mae),
-                "train_mae": float(train_mae),
-                "max_relative_error": float(relative_errors.max()),
-                "p95_relative_error": float(np.percentile(relative_errors, 95)),
-                "mean_residual": float(residuals.mean()),
+                "val_r2": float(val_r2),
+                "data_std": float(std_profit),
+                "max_abs_error": float(abs_errors.max()),
+                "median_abs_error": float(np.median(abs_errors)),
+                "mean_residual_bias": float(residuals.mean())
             },
             "gates": {
-                "max_relative_error_passed": bool(gate_max_rel_error),
-                "p95_relative_error_passed": bool(gate_p95_rel_error),
+                "r2_greater_than_0.60": bool(gate_r2_score),
+                "mae_smaller_than_half_std": bool(gate_mae_vs_std),
                 "mae_drift_passed": bool(gate_mae_drift),
                 "residual_bias_passed": bool(gate_residual_bias),
-                "score_range_passed": bool(gate_score_range),
+                "p95_rel_error_passed": bool(gate_p95_rel_error)
             },
             "promote": promote,
         }
     
         mlflow.log_metric("val_mae", val_mae)
-        mlflow.log_metric("max_relative_error", float(relative_errors.max()))
-        mlflow.log_metric("p95_relative_error", float(np.percentile(relative_errors, 95)))
+        mlflow.log_metric("val_medae", val_medae)
+        mlflow.log_metric("val_r2", val_r2)
+        mlflow.log_metric("max_abs_error", float(abs_errors.max()))
         mlflow.log_metric("mean_residual", float(residuals.mean()))
 
-        mlflow.log_param("gate_max_relative_error_passed", gate_max_rel_error)
-        mlflow.log_param("gate_p95_relative_error_passed", gate_p95_rel_error)
+        mlflow.log_param("gate_r2_greater_than_0.60_passed", gate_r2_score)
+        mlflow.log_param("gate_mae_smaller_than_half_std_passed", gate_mae_vs_std)
         mlflow.log_param("gate_mae_drift_passed", gate_mae_drift)
         mlflow.log_param("gate_residual_bias_passed", gate_residual_bias)
-        mlflow.log_param("gate_score_range_passed", gate_score_range)
+        mlflow.log_param("gate_p95_rel_error_passed", gate_p95_rel_error)
+
         mlflow.log_param("promote", promote)
         
         os.makedirs("evaluation", exist_ok=True)

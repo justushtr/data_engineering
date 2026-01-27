@@ -44,7 +44,7 @@ def load_data_from_s3(bucket_name, file_name):
     bucket = s3.Bucket(bucket_name)
     
     obj = bucket.Object(file_name).get()
-    df = pd.read_csv(BytesIO(obj["Body"].read()), index_col=0)
+    df = pd.read_csv(BytesIO(obj["Body"].read()))
     
     return df
 
@@ -73,6 +73,12 @@ def main():
             f.write(run_id)
 
         df = load_data_from_s3(args.bucket_name, args.filename)
+
+        new_columns_names = ["row_id", "order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "city", "state", "postal_code", "region", "product_id", 
+            "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
+        if len(df.columns) == len(new_columns_names):
+            df.columns = new_columns_names
+        else: df.columns = [c.lower().replace(" ", "-") for c in df.columns]
 
         missing_cols = set(EXPECTED_COLUMNS) - set(df.columns)
         if missing_cols:

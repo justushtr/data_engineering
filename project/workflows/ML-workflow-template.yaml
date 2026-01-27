@@ -1,13 +1,12 @@
 apiVersion: argoproj.io/v1alpha1
-kind: Workflow
+kind: WorkflowTemplate
 metadata:
-  generateName: ml-pipeline-
+  name: ml-pipeline-template
 spec:
   entrypoint: pipeline
   serviceAccountName: argo-workflow
 
-  # workflow level parameters
-  
+  # Default parameters for the template
   arguments:
     parameters:
       - name: experiment-name-mlflow
@@ -15,7 +14,7 @@ spec:
       - name: bucket-name
         value: "input-data"
       - name: filename
-        value: "sales_data.csv"
+        value: "student_performance_data.csv"
       - name: output-path
         value: "data/processed/"
       - name: test-size
@@ -33,7 +32,9 @@ spec:
 
   templates:
 
-  # pipeline definition
+  # ----------------------
+  # Pipeline definition
+  # ----------------------
 
   - name: pipeline
     steps:
@@ -91,7 +92,9 @@ spec:
                   --mae-drift-factor {{workflow.parameters.mae-drift-factor}}
                   --max-mean-residual {{workflow.parameters.max-mean-residual}}
 
-  # Run script as the base
+  # ----------------------
+  # Base script runner
+  # ----------------------
 
   - name: run-script
     inputs:
@@ -99,11 +102,13 @@ spec:
         - name: script
         - name: cli-args
     container:
-      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      image: ghcr.io/marius2311/python-for-ml:2.0.1
       command: ["bash", "-c"]
       args:
-        - >
-          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+        - python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      envFrom:
+        - configMapRef:
+            name: mlops-runtime-config
       env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -129,25 +134,9 @@ spec:
               name: postgres-admin
               key: postgres-password
 
-        - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://minio.data-storage.svc.cluster.local:9000"
-
-        - name: MLFLOW_TRACKING_URI
-          value: "http://mlflow.mlops.svc.cluster.local:5000"
-
-        - name: AWS_DEFAULT_REGION
-          value: "us-east-1"
-
-        - name: POSTGRES_HOST
-          value: "postgres-postgresql.data-storage.svc.cluster.local"
-
-        - name: POSTGRES_PORT
-          value: "5432"
-
-        - name: POSTGRES_DB
-          value: "ds_db"
-
-  # preprocess step separated to write outputs
+  # ----------------------
+  # Preprocessing step
+  # ----------------------
 
   - name: preprocess-step
     inputs:
@@ -155,11 +144,13 @@ spec:
         - name: script
         - name: cli-args
     container:
-      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      image: ghcr.io/marius2311/python-for-ml:2.0.1
       command: ["bash", "-c"]
       args:
-        - >
-          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+        - python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      envFrom:
+        - configMapRef:
+            name: mlops-runtime-config
       env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -181,25 +172,15 @@ spec:
             secretKeyRef:
               name: postgres-admin
               key: postgres-password
-        - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://minio.data-storage.svc.cluster.local:9000"
-        - name: MLFLOW_TRACKING_URI
-          value: "http://mlflow.mlops.svc.cluster.local:5000"
-        - name: AWS_DEFAULT_REGION
-          value: "us-east-1"
-        - name: POSTGRES_HOST
-          value: "postgres-postgresql.data-storage.svc.cluster.local"
-        - name: POSTGRES_PORT
-          value: "5432"
-        - name: POSTGRES_DB
-          value: "ds_db"
     outputs:
       parameters:
         - name: preprocessing-run-id
           valueFrom:
             path: /tmp/preprocessing_run_id.txt
 
-  # train step separated to write outputs
+  # ----------------------
+  # Training step
+  # ----------------------
 
   - name: train-step
     inputs:
@@ -207,11 +188,13 @@ spec:
         - name: script
         - name: cli-args
     container:
-      image: ghcr.io/marius2311/python-for-ml:1.0.3
+      image: ghcr.io/marius2311/python-for-ml:2.0.1
       command: ["bash", "-c"]
       args:
-        - >
-          python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+        - python {{inputs.parameters.script}} {{inputs.parameters.cli-args}}
+      envFrom:
+        - configMapRef:
+            name: mlops-runtime-config
       env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -233,18 +216,6 @@ spec:
             secretKeyRef:
               name: postgres-admin
               key: postgres-password
-        - name: MLFLOW_S3_ENDPOINT_URL
-          value: "http://minio.data-storage.svc.cluster.local:9000"
-        - name: MLFLOW_TRACKING_URI
-          value: "http://mlflow.mlops.svc.cluster.local:5000"
-        - name: AWS_DEFAULT_REGION
-          value: "us-east-1"
-        - name: POSTGRES_HOST
-          value: "postgres-postgresql.data-storage.svc.cluster.local"
-        - name: POSTGRES_PORT
-          value: "5432"
-        - name: POSTGRES_DB
-          value: "ds_db"
     outputs:
       parameters:
         - name: training-run-id

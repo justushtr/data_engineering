@@ -41,7 +41,7 @@ def load_data_from_s3(bucket_name, file_name):
     bucket = s3.Bucket(bucket_name)
     
     obj = bucket.Object(file_name).get()
-    df = pd.read_csv(BytesIO(obj["Body"].read()), index_col = 0)
+    df = pd.read_csv(BytesIO(obj["Body"].read()))
     
     return df
 
@@ -60,8 +60,11 @@ def main():
 
         df = load_data_from_s3(args.bucket_name, args.filename)
 
+        # Rename columns
         new_columns_names = ["row_id", "order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "city", "state", "postal_code", "region", "product_id", 
             "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
+
+        print(f"Loaded columns: {len(df.columns)}, \n Expexted: {len(new_columns_names)}")
 
         if len(df.columns) == len(new_columns_names):
             df.columns = new_columns_names
@@ -71,10 +74,15 @@ def main():
         columns_to_str = ["order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "region",
             "product_id", "category", "sub_category", "product_name"]
 
-        for col in columns_to_str:
+        valid_cols_to_str = []
+        for column in columns_to_str:
+            if column in df.columns: valid_cols_to_str.append(column)
+
+        for col in valid_cols_to_str:
             df[col] = df[col].astype(str)
 
-        df["quantity"] = df["quantiy"].astype(int)
+        # Feature Engineering
+        df["quantity"] = df["quantity"].astype(int)
 
         df["order_date"] = pd.to_datetime(
             df["order_year"].astype(str) + '-' +
@@ -93,9 +101,10 @@ def main():
             df["ship_day"].astype(str)             
         )
 
-        df["original_price_per_unit"] = df["sales"] / (df["quantity" * (1- df["discount"])])
+        df["original_price_per_unit"] = df["sales"] / (df["quantity"] * (1- df["discount"]))
         df["markdown_amount"] = (df["original_price_per_unit"] * df["quantity"]) - df["sales"]
 
+        # Columns for prediction
         target_col = "profit"
 
         categorical_cols = [
