@@ -74,6 +74,9 @@ def main():
 
         df = load_data_from_s3(args.bucket_name, args.filename)
 
+        if 'Unnamed: 0' in df.columns:
+            df = df.drop(columns=['Unnamed: 0'])
+
         new_columns_names = ["row_id", "order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "city", "state", "postal_code", "region", "product_id", 
             "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
         if len(df.columns) == len(new_columns_names):
