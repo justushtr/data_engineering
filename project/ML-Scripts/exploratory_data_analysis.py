@@ -78,7 +78,7 @@ def main():
             "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
         if len(df.columns) == len(new_columns_names):
             df.columns = new_columns_names
-        else: df.columns = [c.lower().replace(" ", "-") for c in df.columns]
+        else: df.columns = [c.lower().replace(" ", "") for c in df.columns]
 
         missing_cols = set(EXPECTED_COLUMNS) - set(df.columns)
         if missing_cols:

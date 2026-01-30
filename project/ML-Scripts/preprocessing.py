@@ -60,27 +60,6 @@ def main():
 
         df = load_data_from_s3(args.bucket_name, args.filename)
 
-        # Rename columns
-        new_columns_names = ["row_id", "order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "city", "state", "postal_code", "region", "product_id", 
-            "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
-
-        print(f"Loaded columns: {len(df.columns)}, \n Expexted: {len(new_columns_names)}")
-
-        if len(df.columns) == len(new_columns_names):
-            df.columns = new_columns_names
-        
-        df = df.dropna()
-
-        columns_to_str = ["order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "region",
-            "product_id", "category", "sub_category", "product_name"]
-
-        valid_cols_to_str = []
-        for column in columns_to_str:
-            if column in df.columns: valid_cols_to_str.append(column)
-
-        for col in valid_cols_to_str:
-            df[col] = df[col].astype(str)
-
         # Feature Engineering
         df["quantity"] = df["quantity"].astype(int)
 
