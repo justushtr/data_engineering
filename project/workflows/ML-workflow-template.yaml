@@ -20,7 +20,7 @@ spec:
       - name: test-size
         value: "0.2"
       - name: random-state
-        value: "42"
+        value: "187"
       - name: max-relative-error
         value: "10.0"
       - name: p95-relative-error
