@@ -60,6 +60,15 @@ def main():
 
         df = load_data_from_s3(args.bucket_name, args.filename)
 
+        if 'Unnamed: 0' in df.columns:
+            df = df.drop(columns=['Unnamed: 0'])
+
+        new_columns_names = ["row_id", "order_id", "ship_mode", "customer_id", "customer_name", "segment", "country", "city", "state", "postal_code", "region", "product_id", 
+            "category", "sub_category", "product_name", "sales", "quantity", "discount", "profit", "order_year", "order_month", "order_day", "ship_year", "ship_month", "ship_day"]
+        if len(df.columns) == len(new_columns_names):
+            df.columns = new_columns_names
+        else: df.columns = [c.lower().replace(" ", "") for c in df.columns]
+
         # Feature Engineering
         df["quantity"] = df["quantity"].astype(int)
 
@@ -106,7 +115,7 @@ def main():
         preprocessor = ColumnTransformer(
             transformers=[
                 ("num", StandardScaler(), numeric_cols),
-                ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols),
+                ("cat", OneHotEncoder(handle_unknown="ignore", drop="first"), categorical_cols),
             ]
         )
 
