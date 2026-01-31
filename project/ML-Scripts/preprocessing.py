@@ -115,7 +115,7 @@ def main():
         preprocessor = ColumnTransformer(
             transformers=[
                 ("num", StandardScaler(), numeric_cols),
-                ("cat", OneHotEncoder(handle_unknown="ignore", drop="first"), categorical_cols),
+                ("cat", OneHotEncoder(drop="first", handle_unknown="error"), categorical_cols),
             ]
         )
 
