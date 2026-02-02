@@ -130,6 +130,23 @@ def main():
             gate_residual_bias,
             gate_variability
         ])
+
+        # ---- Deploy Model
+        if promote:
+            model_uri = f"runs:/{best_run.info.run_id}/model"
+            model_name = "sales_profit_model" 
+            
+            mv = mlflow.register_model(model_uri, model_name)
+            
+            client = MlflowClient()
+            
+            client.transition_model_version_stage(
+                name=model_name,
+                version=mv.version,
+                stage="Production",
+                archive_existing_versions=True
+            )
+            print(f"Model {model_name} version {mv.version} transitioned to Production.")
     
         # ---- Decision artifact
         decision = {
