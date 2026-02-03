@@ -17,14 +17,13 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment-name-mlflow", required=True)
     parser.add_argument("--bucket-name", required=True)
-    parser.add_argument("--filename", required=True)
+    parser.add_argument("--filename", required=False)
     parser.add_argument("--output-path", required=True)
     parser.add_argument("--test-size", type=float, default=0.2)
     parser.add_argument("--random-state", type=int, default=42)
     return parser.parse_args()
 
-
-def load_data_from_s3(bucket_name, file_name):
+def load_data_from_s3(bucket_name):
     s3_endpoint = os.environ.get("MLFLOW_S3_ENDPOINT_URL")
     s3_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
     s3_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -40,11 +39,34 @@ def load_data_from_s3(bucket_name, file_name):
     
     bucket = s3.Bucket(bucket_name)
     
-    obj = bucket.Object(file_name).get()
-    df = pd.read_csv(BytesIO(obj["Body"].read()))
-    
-    return df
+    all_dfs = []
 
+    for obj in bucket.objects.all():
+        if not obj.key.endswith('.csv'): continue
+
+        response = obj.get()
+        df = pd.read_csv(BytesIO(response["Body"].read()))
+
+        if 'Unnamed: 0' in df_temp.columns:
+            df_temp = df_temp.drop(columns=['Unnamed: 0'])
+
+        current_columns = list(df_temp.columns)
+        
+        if reference_columns is None:
+            reference_columns = current_columns
+        
+        else: 
+            if current_columns != reference_columns:
+                raise ValueError(f"Columns error in : {obj.key}.\nExpected: {reference_columns}\nFound{current_columns} ")
+    
+        all_dfs.append(df_temp)
+
+    if not all_dfs:
+        raise RuntimeError(f"No CSV Files in Bucket {bucket_name}!")
+
+    print(f"Number of loaded DataFrames for Training: {len(all_dfs)}")
+
+    return pd.concat(all_dfs, ignore_index = True)
 
 def main():
     args = parse_args()
@@ -58,7 +80,7 @@ def main():
         with open("/tmp/preprocessing_run_id.txt", "w") as f:
             f.write(run_id)
 
-        df = load_data_from_s3(args.bucket_name, args.filename)
+        df = load_data_from_s3(args.bucket_name)
 
         if 'Unnamed: 0' in df.columns:
             df = df.drop(columns=['Unnamed: 0'])
