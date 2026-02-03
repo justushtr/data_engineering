@@ -12,7 +12,6 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment-name-mlflow", required=True)
@@ -66,7 +65,9 @@ def load_data_from_s3(bucket_name):
 
     print(f"Number of loaded DataFrames for Training: {len(all_dfs)}")
 
-    return pd.concat(all_dfs, ignore_index = True)
+    final_df = pd.concat(all_dfs, ignore_index = True)
+
+    return final_df, len(final_df)
 
 def main():
     args = parse_args()
@@ -80,7 +81,7 @@ def main():
         with open("/tmp/preprocessing_run_id.txt", "w") as f:
             f.write(run_id)
 
-        df = load_data_from_s3(args.bucket_name)
+        df, len_df = load_data_from_s3(args.bucket_name)
 
         if 'Unnamed: 0' in df.columns:
             df = df.drop(columns=['Unnamed: 0'])
@@ -171,6 +172,7 @@ def main():
         mlflow.log_metrics({
             "train_rows": len(X_train),
             "val_rows": len(X_val),
+            "total_number_of_rows": len_df,
         })
 
         mlflow.log_artifacts(args.output_path, artifact_path="processed_data")
