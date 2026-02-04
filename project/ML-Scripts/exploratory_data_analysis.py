@@ -139,6 +139,9 @@ def main():
         mlflow.log_metrics({
             "num_rows": len(df),
             "profit_mean": target_stats["profit_mean"],
+            "profit_std" : target_stats["profit_std"],
+            "profit_min" : target_stats["profit_min"],
+            "profit_max" : target_stats["profit_max"],
             "sales_sum": target_stats["sales_sum"],
         })
 
