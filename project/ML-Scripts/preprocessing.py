@@ -37,23 +37,19 @@ def load_data_from_s3(bucket_name):
     )
     
     bucket = s3.Bucket(bucket_name)
-    
+    reference_columns = None
     all_dfs = []
 
     for obj in bucket.objects.all():
         if not obj.key.endswith('.csv'): continue
 
         response = obj.get()
-        df = pd.read_csv(BytesIO(response["Body"].read()))
-
-        if 'Unnamed: 0' in df_temp.columns:
-            df_temp = df_temp.drop(columns=['Unnamed: 0'])
+        df_temp = pd.read_csv(BytesIO(response["Body"].read()))
 
         current_columns = list(df_temp.columns)
         
         if reference_columns is None:
             reference_columns = current_columns
-        
         else: 
             if current_columns != reference_columns:
                 raise ValueError(f"Columns error in : {obj.key}.\nExpected: {reference_columns}\nFound{current_columns} ")
@@ -63,11 +59,11 @@ def load_data_from_s3(bucket_name):
     if not all_dfs:
         raise RuntimeError(f"No CSV Files in Bucket {bucket_name}!")
 
-    print(f"Number of loaded DataFrames for Training: {len(all_dfs)}")
+    print(f"Number of loaded DataFrames: {len(all_dfs)}")
 
-    final_df = pd.concat(all_dfs, ignore_index = True)
+    df_final = pd.concat(all_dfs, ignore_index = True)
 
-    return final_df, len(final_df)
+    return df_final, len(df_final)
 
 def main():
     args = parse_args()

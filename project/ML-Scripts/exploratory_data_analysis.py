@@ -7,25 +7,12 @@ import boto3
 from botocore.client import Config
 from io import BytesIO
 
-EXPECTED_COLUMNS = [
-    "profit",          
-    "sales",            
-    "quantity",         
-    "discount",        
-    "sub_category",  
-    "region",        
-    "segment",     
-    "order_month" 
-]
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment-name-mlflow", required=True)
     parser.add_argument("--bucket-name", required=True)
     parser.add_argument("--filename", required=False) # Optional, durch gesamten Bucket
     return parser.parse_args()
-
 
 def load_data_from_s3(bucket_name):
     s3_endpoint = os.environ.get("MLFLOW_S3_ENDPOINT_URL")
@@ -42,23 +29,19 @@ def load_data_from_s3(bucket_name):
     )
     
     bucket = s3.Bucket(bucket_name)
-    
+    reference_columns = None
     all_dfs = []
 
     for obj in bucket.objects.all():
         if not obj.key.endswith('.csv'): continue
 
         response = obj.get()
-        df = pd.read_csv(BytesIO(response["Body"].read()))
-
-        if 'Unnamed: 0' in df_temp.columns:
-            df_temp = df_temp.drop(columns=['Unnamed: 0'])
+        df_temp = pd.read_csv(BytesIO(response["Body"].read()))
 
         current_columns = list(df_temp.columns)
         
         if reference_columns is None:
             reference_columns = current_columns
-        
         else: 
             if current_columns != reference_columns:
                 raise ValueError(f"Columns error in : {obj.key}.\nExpected: {reference_columns}\nFound{current_columns} ")
@@ -70,7 +53,9 @@ def load_data_from_s3(bucket_name):
 
     print(f"Number of loaded DataFrames: {len(all_dfs)}")
 
-    return pd.concat(all_dfs, ignore_index = True)
+    df_final = pd.concat(all_dfs, ignore_index = True)
+
+    return df_final
 
 def main():
     args = parse_args()
